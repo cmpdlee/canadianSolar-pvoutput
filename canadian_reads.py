@@ -187,7 +187,7 @@ class PVOutputAPI(object):
             'X-Rate-Limit': '1'
         }
 
-        # Make tree attempts
+        # Make three attempts
         for i in range(3):
             try:
                 r = requests.post(url, headers=headers, data=payload, timeout=10)
@@ -275,54 +275,34 @@ def main_loop():
 
     pvo = PVOutputAPI(APIKEY, SYSTEMID)
 
-    # start and stop monitoring (hour of the day)
-    shStart = 5
-    shStop = 21
     # Loop until end of universe
     while True:
-        if shStart <= localnow().hour < shStop:
-            # get fresh temperature from OWM
-            if owm:
-                try:
-                    owm.get()
-                    owm.fresh = True
-                except Exception as e:
-                    print('Error getting weather: {}'.format(e))
-                    owm.fresh = False
+        if owm:
+            try:
+                owm.get()
+                owm.fresh = True
+            except Exception as e:
+                print('Error getting weather: {}'.format(e))
+                owm.fresh = False
 
             # get readings from inverter, if success send  to pvoutput
-            inv.read_inputs()
-            if inv.status != -1:
-                # pvoutput(inv, owm)
-                # temperature report only if available
-                temp = owm.temperature if owm and owm.fresh else None
+        inv.read_inputs()
+        if inv.status != -1:
+            # pvoutput(inv, owm)
+            # temperature report only if available
+            temp = owm.temperature if owm and owm.fresh else None
 
-                pvo.send_status(date=inv.date, energy_gen=inv.wh_today,
-                                power_gen=inv.ac_power, vdc=inv.pv_volts,
-                                vac=inv.ac_volts, temp=temp,
-                                temp_inv=inv.temp, energy_life=inv.wh_total,
-                                power_vdc=inv.pv_power)
-                # sleep until next multiple of 5 minutes
-                min = 5 - localnow().minute % 5
-                sleep(min*60 - localnow().second)
-            else:
-                # some error
-                sleep(60)  # 1 minute before try again
+            pvo.send_status(date=inv.date, energy_gen=inv.wh_today,
+                            power_gen=inv.ac_power, vdc=inv.pv_volts,
+                            vac=inv.ac_volts, temp=temp,
+                            temp_inv=inv.temp, energy_life=inv.wh_total,
+                            power_vdc=inv.pv_power)
+            # sleep until next multiple of 5 minutes
+            min = 5 - localnow().minute % 5
+            sleep(min*60 - localnow().second)
         else:
-            # it is too late or too early, let's sleep until next shift
-            hour = localnow().hour
-            minute = localnow().minute
-            if 24 > hour >= shStop:
-                # before midnight
-                snooze = (((shStart - hour) + 24) * 60) - minute
-            elif shStart > hour >= 0:
-                # after midnight
-                snooze = ((shStart - hour) * 60) - minute
-            print(localnow().strftime('%Y-%m-%d %H:%M') + ' - Next shift starts in ' + \
-                str(snooze) + ' minutes')
-            sys.stdout.flush()
-            snooze = snooze * 60  # seconds
-            sleep(snooze)
+            # some error
+            sleep(60)  # 1 minute before try again
 
 
 if __name__ == '__main__':
