@@ -8,6 +8,7 @@ from time import sleep, time
 from configobj import ConfigObj
 from pyowm import OWM
 from pymodbus.client.sync import ModbusSerialClient as ModbusClient
+from tplink_smartplug import SmartPlug
 
 # read settings from config file
 config = ConfigObj("pvoutput.txt")
@@ -17,6 +18,7 @@ OWMKey = config['OWMKEY']
 OWMLon = float(config['Longitude'])
 OWMLat = float(config['Latitude'])
 LocalTZ = timezone(config['TimeZone'])
+FAN_IP_ADDR = config['FAN_IP_ADDR']
 
 
 # Local time with timezone
@@ -274,6 +276,7 @@ def main_loop():
         owm = False
 
     pvo = PVOutputAPI(APIKEY, SYSTEMID)
+    fan = SmartPlug(FAN_IP_ADDR)
 
     # Loop until end of universe
     while True:
@@ -288,8 +291,11 @@ def main_loop():
             # get readings from inverter, if success send  to pvoutput
         inv.read_inputs()
         if inv.status != -1:
-            # pvoutput(inv, owm)
-            # temperature report only if available
+            if inv.temp >= 30:
+                fan.turn_on()
+            else:
+                fan.turn_off()
+
             temp = owm.temperature if owm and owm.fresh else None
 
             pvo.send_status(date=inv.date, energy_gen=inv.wh_today,
